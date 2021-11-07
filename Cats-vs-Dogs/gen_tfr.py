@@ -1,31 +1,41 @@
-import tensorflow as tf
 import os
 import glob
 import cv2
 import itertools
 import random
 import re
+import numpy as np
+import tensorflow as tf
+import math
 
-data_root = "C:/Projects/Cats-vs-Dogs/PetImages"
-save_path = 'data/pet'
+data_root = "C:\\Projects\\Cats-vs-Dogs\\PetImages"
+save_path = "C:\\Data\\Cats-vs-Dogs"
 
-dirs = glob.glob(os.path.join(data_root, "*/"))
+dirs = glob.glob(os.path.join(data_root, "*\\"))
 
-image_list = [glob.glob(os.path.join(indiv_dir, "*.jpg")) for indiv_dir in dirs]
-images = list(itertools.chain(*image_list))
+train_images = []
+test_images = []
 
-random.shuffle(images)
+for indiv_dir in dirs:
+    images = glob.glob(os.path.join(indiv_dir, "*.jpg"))
+    pivot = int(len(images) * 0.8)
+    train_images.extend(images[0:pivot])
+    test_images.extend(images[pivot:])
+    
+random.shuffle(train_images)
+random.shuffle(test_images)
 
-pivot = len(images) * 0.8
-
-train_images = images[0:pivot]
-test_images = images[(pivot+1):]
+# print(len(train_images))
+# print(len(test_images))
 
 ratio = 240 / 320
 
 def adjust_image(image_path):
     img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     
+    if img is None:
+        raise Exception("Invalid JPEG file: {}".format(image_path))
+        
     width = img.shape[1]
     height = img.shape[0]
     
@@ -34,7 +44,7 @@ def adjust_image(image_path):
     if height / width >= ratio:
         scale = 320 / float(width)
 
-        new_height = int(height * scale)
+        new_height = math.ceil(height * scale)
         dim = (320, new_height)
         
         if width >= 320:
@@ -69,7 +79,12 @@ def int64_feature(value):
 
 
 def proc_record(image, reg, writer):
-    new_image = adjust_image(image)
+    print("processing iamge {}".format(image))
+    try:
+        new_image = adjust_image(image)
+    except:
+        return
+        
     assert (new_image.shape[1] == 320 and new_image.shape[0] == 240), "Invalid dimension"
         
     searchObj = re.search(reg, image)
