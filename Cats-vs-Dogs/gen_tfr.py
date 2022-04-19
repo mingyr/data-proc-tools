@@ -28,7 +28,34 @@ random.shuffle(test_images)
 # print(len(train_images))
 # print(len(test_images))
 
-ratio = 240 / 320
+HEIGHT=240
+WIDTH=320
+CHANNEL=3
+
+ratio = HEIGHT / WIDTH
+
+def crop_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+
+    if img is None:
+        raise Exception("Invalid JPEG file: {}".format(image_path))
+
+    width = img.shape[1]
+    height = img.shape[0]
+    channel = img.shape[2]
+    # print("width -> {}, height -> {}".format(width, height))
+
+    if width < WIDTH or height < HEIGHT:
+        raise Exception("JPEG file {} is too small".format(image_path))
+
+    if channel != CHANNEL:
+        raise Exception("Only processing color image file".format(image_path))
+
+    resized = img[((height >> 1) - (HEIGHT >> 1)) : ((height >> 1) + (HEIGHT >> 1)),
+                  ((width >> 1) - (WIDTH >> 1)) : ((width >> 1) + (WIDTH >> 1)), ...]
+
+    return resized
+
 
 def adjust_image(image_path):
     img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
@@ -38,33 +65,34 @@ def adjust_image(image_path):
         
     width = img.shape[1]
     height = img.shape[0]
+    channel = img.shape[2]
     
     # print("width -> {}, height -> {}".format(width, height))
     
     if height / width >= ratio:
-        scale = 320 / float(width)
+        scale = WIDTH / float(width)
 
         new_height = math.ceil(height * scale)
-        dim = (320, new_height)
+        dim = (WIDTH, new_height)
         
-        if width >= 320:
+        if width >= WIDTH:
             resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
         else:
             resized = cv2.resize(img, dim, interpolation = cv2.INTER_CUBIC)
         
-        resized = resized[(int(new_height / 2) - 120) : (int(new_height / 2) + 120), ...]        
+        resized = resized[(int(new_height / 2) - (HEIGHT >> 1)) : (int(new_height / 2) + (HEIGHT >> 1)), ...]        
     else:
-        scale = 240 / float(height)
+        scale = HEIGHT / float(height)
         
         new_width = int(width * scale)
-        dim = (new_width, 240)
+        dim = (new_width, HEIGHT)
         
-        if height >= 240:
+        if height >= HEIGHT:
             resized = cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
         else:
             resized = cv2.resize(img, dim, interpolation = cv2.INTER_CUBIC)
         
-        resized = resized[:, (int(new_width / 2) - 160) : (int(new_width / 2) + 160), ...]        
+        resized = resized[:, (int(new_width / 2) - (WIDTH >> 1)) : (int(new_width / 2) + (WIDTH >> 1)), ...]        
         
     return resized
 
@@ -81,11 +109,12 @@ def int64_feature(value):
 def proc_record(image, reg, writer):
     print("processing iamge {}".format(image))
     try:
-        new_image = adjust_image(image)
+        new_image = crop_image(image)
+        # new_image = adjust_image(image)
     except:
-        return
+        return False
         
-    assert (new_image.shape[1] == 320 and new_image.shape[0] == 240), "Invalid dimension"
+    assert (new_image.shape[1] == WIDTH and new_image.shape[0] == HEIGHT), "Invalid dimension"
         
     searchObj = re.search(reg, image)
     if searchObj:
@@ -109,6 +138,7 @@ def proc_record(image, reg, writer):
     example = tf.train.Example(features = tf.train.Features(feature = feature))
     writer.write(example.SerializeToString())
 
+    return True
 
 reg = re.compile(r".\\Cat\\\d+\.jpg$")
 
@@ -117,8 +147,8 @@ writer = tf.io.TFRecordWriter(os.path.join(save_path, 'pet-train.tfr'))
 num_train_records = 0
 
 for image in train_images:
-    proc_record(image, reg, writer)
-    num_train_records = num_train_records + 1
+    ret = proc_record(image, reg, writer)
+    if ret: num_train_records = num_train_records + 1
 
 writer.close()
 print('end of tfrecords preparation for training')
@@ -128,8 +158,8 @@ writer = tf.io.TFRecordWriter(os.path.join(save_path, 'pet-test.tfr'))
 num_test_records = 0
 
 for image in test_images:
-    proc_record(image, reg, writer)
-    num_test_records = num_test_records + 1
+    ret = proc_record(image, reg, writer)
+    if ret: num_test_records = num_test_records + 1
 
 writer.close()
 print('end of tfrecords preparation for testing')
